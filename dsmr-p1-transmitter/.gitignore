@@ -1,0 +1,10 @@
+actual-data
+managed_components
+.build
+build
+.devcontainer
+
+debug.log
+sdkconfig.ci
+sdkconfig.old
+sdkconfig.old.old

@@ -1,0 +1,10 @@
+idf_component_register(
+    SRCS 
+    "main.c"
+    "telegram/telegram.c"
+    "espnow/receive.c"
+    "espnow/wifi.c"
+    "websocket/websocket.c"
+    "led/led.c"
+    INCLUDE_DIRS
+    ".")

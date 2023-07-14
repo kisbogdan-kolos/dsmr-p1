@@ -1,0 +1,267 @@
+[
+	{
+		"id": "8bc190b4ebfb6a5e",
+		"type": "tab",
+		"label": "DSMR-P1",
+		"disabled": false,
+		"info": "",
+		"env": []
+	},
+	{
+		"id": "53603ec74740d29d",
+		"type": "websocket in",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"server": "151d911a72e38b02",
+		"client": "",
+		"x": 190,
+		"y": 140,
+		"wires": [["5f85a864c5b2923d", "2f8c792440341d1d"]]
+	},
+	{
+		"id": "5f85a864c5b2923d",
+		"type": "json",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"property": "payload",
+		"action": "",
+		"pretty": false,
+		"x": 370,
+		"y": 140,
+		"wires": [["296623b124ace922", "2a432cababaacc02"]]
+	},
+	{
+		"id": "7641b2dff67771fd",
+		"type": "websocket out",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"server": "151d911a72e38b02",
+		"client": "",
+		"x": 710,
+		"y": 140,
+		"wires": []
+	},
+	{
+		"id": "296623b124ace922",
+		"type": "function",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "ack",
+		"func": "msg.payload = `ACK${msg.payload.id}`;\nreturn msg;",
+		"outputs": 1,
+		"noerr": 0,
+		"initialize": "",
+		"finalize": "",
+		"libs": [],
+		"x": 510,
+		"y": 140,
+		"wires": [["7641b2dff67771fd"]]
+	},
+	{
+		"id": "d1a58f973960aea9",
+		"type": "influxdb batch",
+		"z": "8bc190b4ebfb6a5e",
+		"influxdb": "e95d21f8.14a1c",
+		"precision": "",
+		"retentionPolicy": "",
+		"name": "",
+		"database": "database",
+		"precisionV18FluxV20": "s",
+		"retentionPolicyV18Flux": "",
+		"org": "home",
+		"bucket": "eon",
+		"x": 720,
+		"y": 220,
+		"wires": []
+	},
+	{
+		"id": "2a432cababaacc02",
+		"type": "function",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "generate data for InfluxDB",
+		"func": "const {id, meterNumber, time, ...data} = msg.payload;\n\nconst parsedTime = new Date(time);\n\nmsg.payload = [\n    {\n        measurement: \"energy\",\n        fields: {\n            tariff: data.currentTariff,\n            allImported: data.all.importedEnergy,\n            allExported: data.all.exportedEnergy,\n            tariff1Imported: data.tariff1.importedEnergy,\n            tariff1Exported: data.tariff1.exportedEnergy,\n            tariff2Imported: data.tariff2.importedEnergy,\n            tariff2Exported: data.tariff2.exportedEnergy,\n            allImportedReactive: data.importreactiveEnergy,\n            allExportedReactive: data.exportreactiveEnergy,\n            reactiveQI: data.reactiveEnergy.QI,\n            reactiveQII: data.reactiveEnergy.QII,\n            reactiveQIII: data.reactiveEnergy.QIII,\n            reactiveQIV: data.reactiveEnergy.QIV,\n        },\n        timestamp: new Date(parsedTime),\n    },\n    {\n        measurement: \"power\",\n        fields: {\n            combinedPowerFactor: data.combinedPowerFactor / 1000,\n            powerFactorL1: data.powerFactor.L1 / 1000,\n            powerFactorL2: data.powerFactor.L2 / 1000,\n            powerFactorL3: data.powerFactor.L3 / 1000,\n            allImport: data.importPower,\n            allExport: data.exportPower,\n            reactiveQI: data.reactivePower.QI,\n            reactiveQII: data.reactivePower.QII,\n            reactiveQIII: data.reactivePower.QIII,\n            reactiveQIV: data.reactivePower.QIV,\n        },\n        timestamp: new Date(parsedTime),\n    },\n    {\n        measurement: \"voltage\",\n        fields: {\n            L1: data.voltage.L1 / 10,\n            L2: data.voltage.L2 / 10,\n            L3: data.voltage.L3 / 10,\n            frequency: data.frequency / 100,\n        },\n        timestamp: new Date(parsedTime),\n    }\n];\n\n\nreturn msg;",
+		"outputs": 1,
+		"noerr": 0,
+		"initialize": "",
+		"finalize": "",
+		"libs": [],
+		"x": 470,
+		"y": 220,
+		"wires": [["d1a58f973960aea9"]]
+	},
+	{
+		"id": "2f8c792440341d1d",
+		"type": "trigger",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"op1": "true",
+		"op2": "false",
+		"op1type": "bool",
+		"op2type": "bool",
+		"duration": "2",
+		"extend": true,
+		"overrideDelay": false,
+		"units": "min",
+		"reset": "",
+		"bytopic": "all",
+		"topic": "topic",
+		"outputs": 1,
+		"x": 330,
+		"y": 320,
+		"wires": [["ebceef369152cbfd"]]
+	},
+	{
+		"id": "ebceef369152cbfd",
+		"type": "change",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"rules": [
+			{
+				"t": "set",
+				"p": "from",
+				"pt": "msg",
+				"to": "Node-RED <noreply@kisbogdan.hu>",
+				"tot": "str"
+			}
+		],
+		"action": "",
+		"property": "",
+		"from": "",
+		"to": "",
+		"reg": false,
+		"x": 510,
+		"y": 320,
+		"wires": [["a81a3eab0e2ad19b"]]
+	},
+	{
+		"id": "a81a3eab0e2ad19b",
+		"type": "switch",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"property": "payload",
+		"propertyType": "msg",
+		"rules": [
+			{
+				"t": "true"
+			},
+			{
+				"t": "else"
+			}
+		],
+		"checkall": "true",
+		"repair": false,
+		"outputs": 2,
+		"x": 170,
+		"y": 460,
+		"wires": [["a715ca59c6b7658e"], ["d3baf2b952616985"]]
+	},
+	{
+		"id": "a715ca59c6b7658e",
+		"type": "change",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"rules": [
+			{
+				"t": "set",
+				"p": "topic",
+				"pt": "msg",
+				"to": "Power meter connection established",
+				"tot": "str"
+			}
+		],
+		"action": "",
+		"property": "",
+		"from": "",
+		"to": "",
+		"reg": false,
+		"x": 350,
+		"y": 420,
+		"wires": [["89cf4821a89f0763"]]
+	},
+	{
+		"id": "d3baf2b952616985",
+		"type": "change",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"rules": [
+			{
+				"t": "set",
+				"p": "topic",
+				"pt": "msg",
+				"to": "Power meter connection lost",
+				"tot": "str"
+			}
+		],
+		"action": "",
+		"property": "",
+		"from": "",
+		"to": "",
+		"reg": false,
+		"x": 350,
+		"y": 500,
+		"wires": [["1a6053b093d7031b"]]
+	},
+	{
+		"id": "89cf4821a89f0763",
+		"type": "template",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"field": "payload",
+		"fieldType": "msg",
+		"format": "handlebars",
+		"syntax": "mustache",
+		"template": "Successfully reconnected to power meter.",
+		"output": "str",
+		"x": 520,
+		"y": 420,
+		"wires": [["26e4e34a3319f304"]]
+	},
+	{
+		"id": "1a6053b093d7031b",
+		"type": "template",
+		"z": "8bc190b4ebfb6a5e",
+		"name": "",
+		"field": "payload",
+		"fieldType": "msg",
+		"format": "handlebars",
+		"syntax": "mustache",
+		"template": "Connection lost to power meter. No message received in the last 2 minutes.",
+		"output": "str",
+		"x": 520,
+		"y": 500,
+		"wires": [["26e4e34a3319f304"]]
+	},
+	{
+		"id": "26e4e34a3319f304",
+		"type": "e-mail",
+		"z": "8bc190b4ebfb6a5e",
+		"server": "mail.kisbogdan.hu",
+		"port": "465",
+		"secure": true,
+		"tls": false,
+		"name": "kolos@kisbogdan.hu",
+		"dname": "",
+		"x": 760,
+		"y": 460,
+		"wires": []
+	},
+	{
+		"id": "151d911a72e38b02",
+		"type": "websocket-listener",
+		"path": "/power-meter",
+		"wholemsg": "false"
+	},
+	{
+		"id": "e95d21f8.14a1c",
+		"type": "influxdb",
+		"hostname": "127.0.0.1",
+		"port": "8086",
+		"protocol": "http",
+		"database": "database",
+		"name": "influxdb2",
+		"usetls": false,
+		"tls": "",
+		"influxdbVersion": "2.0",
+		"url": "https://influxdb.kisbogdan.hu",
+		"rejectUnauthorized": true
+	}
+]

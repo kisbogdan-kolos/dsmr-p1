@@ -109,6 +109,13 @@ static void dsmr_espnow_task(void *pvParameter)
             {
                 ledSetColor(BLUE);
             }
+            else if (esp_get_free_heap_size() < 10000)
+            {
+                ESP_LOGE(TAG, "Heap size is low: %lu, restarting...", esp_get_free_heap_size());
+                ledSetColor(RED);
+                vTaskDelay(10000 / portTICK_PERIOD_MS);
+                esp_restart();
+            }
         }
 
         if (currentData != NULL && uxQueueMessagesWaiting(s_example_espnow_queue) == 0)

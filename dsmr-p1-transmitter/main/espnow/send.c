@@ -198,7 +198,7 @@ static void dsmr_espnow_task(void *pvParameter)
                     free(payload);
                 }
 
-                if (sendAttempts >= 5)
+                if (sendAttempts >= ESPNOW_SLOW_SEND_LIMIT)
                 {
                     ledSetColor(YELLOW);
                     ESP_LOGW(TAG, "Not getting response, slowing send rate");
@@ -308,7 +308,7 @@ void sendQueueData(Data *data)
         ESP_LOGE(TAG, "Send data to queue fail");
         free(data);
     }
-    if (sendAttempts >= 5)
+    if (sendAttempts >= ESPNOW_SLOW_SEND_LIMIT)
     {
         ledSetColor(YELLOW);
     }

@@ -19,7 +19,7 @@ static const char *TAG = "uart";
 
 static void dsmrReadTask(void *arg)
 {
-    vTaskDelay(10000 / portTICK_PERIOD_MS);
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     uart_config_t uart_config = {
         .baud_rate = UART_BAUD_RATE,
         .data_bits = UART_DATA_8_BITS,

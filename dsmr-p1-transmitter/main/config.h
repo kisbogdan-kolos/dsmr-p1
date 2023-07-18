@@ -9,8 +9,8 @@
 #define TELEGRAM_MAX_LENGTH 4096
 
 #define DATA_QUEUE_LENGTH 150
-#define DATA_QUEUE_SAVE_LIMIT 11
-#define DATA_QUEUE_SAVE_SIZE 10
+#define DATA_QUEUE_SAVE_LIMIT 110
+#define DATA_QUEUE_SAVE_SIZE 100
 #define DATA_QUEUE_READ_SIZE 140
 #define DATA_QUEUE_SAVE_TIME (60 * 5)
 
@@ -22,6 +22,7 @@
 #define ESPNOW_PMK_KEY "aaaaaaaaaaaaaaa"
 #define ESPNOW_LMK_KEY "bbbbbbbbbbbbbbb"
 #define ESPNOW_ENCRYPT true
+#define ESPNOW_SLOW_SEND_LIMIT 10
 
 #define LED_PIN 8
 #define LIGHT_SENSOR ADC_CHANNEL_2

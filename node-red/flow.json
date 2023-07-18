@@ -67,8 +67,8 @@
 		"database": "database",
 		"precisionV18FluxV20": "s",
 		"retentionPolicyV18Flux": "",
-		"org": "home",
-		"bucket": "eon",
+		"org": "org",
+		"bucket": "bucket",
 		"x": 720,
 		"y": 220,
 		"wires": []
@@ -119,7 +119,7 @@
 				"t": "set",
 				"p": "from",
 				"pt": "msg",
-				"to": "Node-RED <noreply@kisbogdan.hu>",
+				"to": "Node-RED <noreply@example.com>",
 				"tot": "str"
 			}
 		],
@@ -234,11 +234,11 @@
 		"id": "26e4e34a3319f304",
 		"type": "e-mail",
 		"z": "8bc190b4ebfb6a5e",
-		"server": "mail.kisbogdan.hu",
+		"server": "mail.example.com",
 		"port": "465",
 		"secure": true,
 		"tls": false,
-		"name": "kolos@kisbogdan.hu",
+		"name": "you@example.com",
 		"dname": "",
 		"x": 760,
 		"y": 460,
@@ -261,7 +261,7 @@
 		"usetls": false,
 		"tls": "",
 		"influxdbVersion": "2.0",
-		"url": "https://influxdb.kisbogdan.hu",
+		"url": "https://influxdb.example.com",
 		"rejectUnauthorized": true
 	}
 ]

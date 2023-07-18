@@ -8,3 +8,5 @@ debug.log
 sdkconfig.ci
 sdkconfig.old
 sdkconfig.old.old
+
+config.h

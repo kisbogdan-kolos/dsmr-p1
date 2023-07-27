@@ -23,7 +23,7 @@ This project is for reading the data from a smart electricity meter, and transmi
 
 ## How the system works
 
-## Setup
+## Set-up
 
 Instruction are in the folders of each component.
 
@@ -35,11 +35,11 @@ I was only able to test he the system with a Sanxing SX631 (S34U18) used by E.ON
 
 ### Send frequency
 
-Currently, the power meter sends data every 10 seconds, and the sample configuration is good for this. The DMSR P1 [standard](https://www.netbeheernederland.nl/_upload/Files/Slimme_meter_15_a727fce1f1.pdf) requires data to be send every second, and this requires some timing modifications in the code. (This canbe found in the transmitters [readme](dsmr-p1-transmitter/README.md))
+Currently, the power meter sends data every 10 seconds, and the sample configuration is good for this. The DSMR P1 [standard](https://www.netbeheernederland.nl/_upload/Files/Slimme_meter_15_a727fce1f1.pdf) requires data to be send every second, and this requires some timing modifications in the code. (This can be found in the transmitters [readme](dsmr-p1-transmitter/README.md))
 
 ### CRC
 
-The DMSR P1 standard has a CRC16 at the end of the data. In an ideal setting, this would be checked for every data transmission, but the Sanxing SX631 (S34U18) doesn't seem to use the standard CRC16-IBM, which is in the standard. Some users ([link](https://hup.hu/node/175802)) had success with using a CRC16-X25, but it did not work for me. Because of this, the CRC is not validated, and is just discarded. If you need the CRC, you can implement your own checking algorithm.
+The DSMR P1 standard has a CRC16 at the end of the data. In an ideal setting, this would be checked for every data transmission, but the Sanxing SX631 (S34U18) doesn't seem to use the standard CRC16-IBM, which is in the standard. Some users ([link](https://hup.hu/node/175802)) had success with using a CRC16-X25, but it did not work for me. Because of this, the CRC is not validated, and is just discarded. If you need the CRC, you can implement your own checking algorithm.
 
 ## Transmitter and receiver combined
 

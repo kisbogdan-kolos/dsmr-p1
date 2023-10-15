@@ -26,8 +26,6 @@ static const char *TAG = "espnow-send";
 
 static QueueHandle_t s_example_espnow_queue;
 static QueueHandle_t dataQueueHandle;
-// f4:12:fa:18:73:ac
-// f4:12:fa:15:c8:94
 static uint8_t destMac[6] = ESPNOW_DEST_MAC;
 static Data *currentData = NULL;
 static uint8_t sendAttempts = 0;

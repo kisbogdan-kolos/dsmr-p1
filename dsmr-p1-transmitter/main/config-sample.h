@@ -8,7 +8,7 @@
 
 #define TELEGRAM_MAX_LENGTH 4096 // bytes
 
-#define DATA_QUEUE_LENGTH 150         // items
+#define DATA_QUEUE_LENGTH 200         // items
 #define DATA_QUEUE_SAVE_LIMIT 110     // items
 #define DATA_QUEUE_SAVE_SIZE 100      // items
 #define DATA_QUEUE_READ_SIZE 140      // items

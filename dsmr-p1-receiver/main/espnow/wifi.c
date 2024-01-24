@@ -17,6 +17,7 @@
 static const char *TAG = "wifi station";
 
 static int s_retry_num = 0;
+static bool connected = false;
 
 static SemaphoreHandle_t wifiGotIp;
 
@@ -29,6 +30,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_STA_DISCONNECTED)
     {
+        connected = false;
         if (s_retry_num < 5)
         {
             esp_wifi_connect();
@@ -48,6 +50,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)event_data;
         ESP_LOGI(TAG, "got ip:" IPSTR, IP2STR(&event->ip_info.ip));
         s_retry_num = 0;
+        connected = true;
         xSemaphoreGive(wifiGotIp);
         ledSetColor(CYAN);
     }
@@ -95,4 +98,10 @@ void wifiInit(SemaphoreHandle_t _wifiGotIp)
 void wifiDisconnect()
 {
     esp_wifi_disconnect();
+}
+
+void wifiReconnect()
+{
+    if (!connected)
+        esp_wifi_connect();
 }

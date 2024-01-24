@@ -5,3 +5,5 @@
 void wifiInit(SemaphoreHandle_t wifiGotIp);
 
 void wifiDisconnect();
+
+void wifiReconnect();

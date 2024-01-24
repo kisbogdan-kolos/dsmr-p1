@@ -18,6 +18,7 @@
 #include "config.h"
 
 #include "espnow/receive.h"
+#include "espnow/wifi.h"
 #include "websocket/websocket.h"
 #include "led/led.h"
 
@@ -34,6 +35,15 @@ static void leakDetector(void *pvParameters)
 }
 #endif
 
+static void wifiReconnectTask(void *pvParameters)
+{
+    for (;;)
+    {
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
+        wifiReconnect();
+    }
+}
+
 void app_main(void)
 {
     ledInit();
@@ -43,6 +53,8 @@ void app_main(void)
     ledSetColor(YELLOW);
     SemaphoreHandle_t wifiGotIp = xSemaphoreCreateBinary();
     receiveInit(wifiGotIp);
+
+    xTaskCreate(wifiReconnectTask, "wifi_reconnect", 4096, NULL, 0, NULL);
 
     while (xSemaphoreTake(wifiGotIp, portMAX_DELAY) != pdTRUE)
         ;

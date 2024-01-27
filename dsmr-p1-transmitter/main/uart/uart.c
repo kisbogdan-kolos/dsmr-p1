@@ -43,6 +43,10 @@ static void dsmrReadTask(void *arg)
     size_t idx = 0;
     bool endOfData = false;
 
+#ifdef LED_TWO_LEDS
+    ledSetColor(GREEN, 1);
+#endif
+
     while (1)
     {
         int len = uart_read_bytes(UART_PORT_NUM, data, (UART_BUF_SIZE - 1), 200 / portTICK_PERIOD_MS);
@@ -58,7 +62,11 @@ static void dsmrReadTask(void *arg)
                     size_t dataLen = strlen(start);
                     strcpy(telegram, start);
                     idx = dataLen;
-                    ledSetColor(CYAN);
+#ifdef LED_TWO_LEDS
+                    ledSetColor(CYAN, 1);
+#else
+                    ledSetColor(CYAN, 0);
+#endif
                 }
                 else
                 {
@@ -104,6 +112,14 @@ static void dsmrReadTask(void *arg)
 
 void uartInit()
 {
+#ifdef LED_TWO_LEDS
+    ledSetColor(YELLOW, 1);
+#else
+    ledSetColor(YELLOW, 0);
+#endif
     xTaskCreate(dsmrReadTask, "uart_task", 4096, NULL, 10, NULL);
-    ledSetColor(YELLOW);
+
+#ifndef LED_TWO_LEDS
+    vTaskDelay(1200 / portTICK_PERIOD_MS);
+#endif
 }

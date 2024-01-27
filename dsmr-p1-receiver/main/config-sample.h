@@ -20,7 +20,11 @@
 #define WEBSOCKET_NETWORK_TIMEOUT 10000   // ms
 
 #define LED_PIN 8
+#define LED_TWO_LEDS
+#define LED_INACTIVE_TIME 30000 // ms
 #define LIGHT_SENSOR ADC_CHANNEL_2
 #define BRIGHTNESS_ADJUST_INTERVAL (60) // s
 
 // #define LEAK_DETECTOR
+
+// #define CPU_MONITOR // must enable 'configGENERATE_RUN_TIME_STATS' in 'sdkconfig

@@ -45,6 +45,13 @@ static void datastoreInitTask(void *pvParameters)
         {
             ESP_LOGE(TAG, "Failed to initialize SPIFFS (%s)", esp_err_to_name(ret));
         }
+
+#ifdef LED_TWO_LEDS
+        ledSetColor(RED, 0);
+#endif
+
+        vTaskDelete(NULL);
+
         return;
     }
 
@@ -55,6 +62,9 @@ static void datastoreInitTask(void *pvParameters)
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "SPIFFS_check() failed (%s)", esp_err_to_name(ret));
+
+        vTaskDelete(NULL);
+
         return;
     }
     else
@@ -68,6 +78,13 @@ static void datastoreInitTask(void *pvParameters)
     {
         ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
         esp_spiffs_format(conf.partition_label);
+
+#ifdef LED_TWO_LEDS
+        ledSetColor(RED, 0);
+#endif
+
+        vTaskDelete(NULL);
+
         return;
     }
     else
@@ -75,7 +92,7 @@ static void datastoreInitTask(void *pvParameters)
         ESP_LOGI(TAG, "Partition size: total: %d, used: %d", total, used);
     }
 
-    ledSetColor(GREEN);
+    ledSetColor(GREEN, 0);
 
     vTaskDelete(NULL);
 }
@@ -93,12 +110,21 @@ void datastoreSave(QueueHandle_t queue, size_t count)
         return;
     }
 
+#ifdef LED_TWO_LEDS
+    ledSetColor(YELLOW, 0);
+#endif
+
     size_t total = 0, used = 0;
     esp_err_t ret = esp_spiffs_info(conf.partition_label, &total, &used);
     if (ret != ESP_OK)
     {
         ESP_LOGE(TAG, "Failed to get SPIFFS partition information (%s). Formatting...", esp_err_to_name(ret));
         esp_spiffs_format(conf.partition_label);
+
+#ifdef LED_TWO_LEDS
+        ledSetColor(RED, 0);
+#endif
+
         return;
     }
 
@@ -111,6 +137,10 @@ void datastoreSave(QueueHandle_t queue, size_t count)
         {
             free(data);
         }
+
+#ifdef LED_TWO_LEDS
+        ledSetColor(RED, 0);
+#endif
 
         return;
     }
@@ -125,6 +155,11 @@ void datastoreSave(QueueHandle_t queue, size_t count)
     {
         ESP_LOGE(TAG, "Failed to open file for writing");
         free(fname);
+
+#ifdef LED_TWO_LEDS
+        ledSetColor(RED, 0);
+#endif
+
         return;
     }
 
@@ -147,6 +182,10 @@ void datastoreSave(QueueHandle_t queue, size_t count)
     ESP_LOGI(TAG, "Written %d items to %s", currentCount, fname);
     fclose(f);
     free(fname);
+
+#ifdef LED_TWO_LEDS
+    ledSetColor(GREEN, 0);
+#endif
 }
 
 void datastoreRead(QueueHandle_t queue, size_t maxCount)
@@ -157,12 +196,21 @@ void datastoreRead(QueueHandle_t queue, size_t maxCount)
         return;
     }
 
+#ifdef LED_TWO_LEDS
+    ledSetColor(CYAN, 0);
+#endif
+
     ESP_LOGI(TAG, "Reading from SPIFFS");
 
     DIR *d = opendir("/spiffs");
     if (d == NULL)
     {
         ESP_LOGE(TAG, "Failed to open directory");
+
+#ifdef LED_TWO_LEDS
+        ledSetColor(RED, 0);
+#endif
+
         return;
     }
 
@@ -236,4 +284,8 @@ void datastoreRead(QueueHandle_t queue, size_t maxCount)
     }
 
     closedir(d);
+
+#ifdef LED_TWO_LEDS
+    ledSetColor(GREEN, 0);
+#endif
 }

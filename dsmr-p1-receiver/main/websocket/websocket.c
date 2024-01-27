@@ -15,10 +15,13 @@
 #include "websocket.h"
 #include "espnow/receive.h"
 #include "led/led.h"
+#include "espnow/wifi.h"
 
 static const char *TAG = "websocket";
 
 static esp_websocket_client_handle_t client;
+
+static bool connected = false;
 
 static void websocket_event_handler(void *handler_args, esp_event_base_t base, int32_t event_id, void *event_data)
 {
@@ -27,11 +30,14 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
     {
     case WEBSOCKET_EVENT_CONNECTED:
         ESP_LOGI(TAG, "WEBSOCKET_EVENT_CONNECTED");
-        ledSetColor(GREEN);
+        ledSetColor(GREEN, 0);
+        connected = true;
         break;
     case WEBSOCKET_EVENT_DISCONNECTED:
         ESP_LOGI(TAG, "WEBSOCKET_EVENT_DISCONNECTED");
-        ledSetColor(CYAN);
+        connected = false;
+        if (wifiIsConnected())
+            ledSetColor(CYAN, 0);
         break;
     case WEBSOCKET_EVENT_DATA:
         if (data->op_code == 1)
@@ -45,7 +51,7 @@ static void websocket_event_handler(void *handler_args, esp_event_base_t base, i
             {
                 ESP_LOGI(TAG, "Received id: %lu", id);
                 receiveAck(id);
-                ledSetColor(BLUE);
+                ledSetColor(BLUE, 0);
             }
             free(text);
         }
@@ -89,7 +95,14 @@ void websocketDestroy()
 
 void websocketSendData(Data *data)
 {
+    if (!connected)
+        return;
     char *json = telegramToJson(data);
     esp_websocket_client_send_text(client, json, strlen(json), portMAX_DELAY);
     free(json);
+}
+
+bool websocketIsConnected()
+{
+    return connected;
 }

@@ -28,6 +28,10 @@ static const char *TAG = "espnow-recv";
 static QueueHandle_t s_example_espnow_queue;
 static QueueHandle_t dataQueueHandle;
 
+#ifdef LED_TWO_LEDS
+static SemaphoreHandle_t gotData;
+#endif
+
 static uint8_t destMac[6] = ESPNOW_DEST_MAC;
 
 static void dsmr_wifi_init(SemaphoreHandle_t wifiGotIp)
@@ -89,8 +93,6 @@ static void dsmr_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint
         ESP_LOGW(TAG, "Send receive queue fail");
         free(recv_cb->data);
     }
-
-    ledSetColor(BLUE);
 }
 
 static void dsmr_espnow_task(void *pvParameter)
@@ -123,7 +125,7 @@ static void dsmr_espnow_task(void *pvParameter)
                     if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
                     {
                         ESP_LOGE(TAG, "Send error, rebooting...");
-                        ledSetColor(RED);
+                        ledSetColor(RED, 0);
                         vTaskDelay(10000 / portTICK_PERIOD_MS);
                         esp_restart();
                     }
@@ -136,7 +138,8 @@ static void dsmr_espnow_task(void *pvParameter)
                 }
 
                 vTaskDelay(100 / portTICK_PERIOD_MS);
-                ledSetColor(GREEN);
+
+                ledSetColor(GREEN, 0);
 
                 break;
             }
@@ -151,6 +154,14 @@ static void dsmr_espnow_task(void *pvParameter)
                     if (payload->crc == calc_crc)
                     {
                         ESP_LOGI(TAG, "Received data id: %lu", payload->data.id);
+
+                        if (wifiIsConnected() && websocketIsConnected())
+                            ledSetColor(BLUE, 0);
+
+#ifdef LED_TWO_LEDS
+                        xSemaphoreGive(gotData);
+#endif
+
                         websocketSendData(&(payload->data));
                     }
                     else
@@ -207,10 +218,28 @@ static esp_err_t dsmr_espnow_init(void)
     ESP_ERROR_CHECK(esp_now_add_peer(peer));
     free(peer);
 
-    xTaskCreate(dsmr_espnow_task, "example_espnow_task", 2048, NULL, 4, NULL);
+    xTaskCreate(dsmr_espnow_task, "espnow", 2048, NULL, 4, NULL);
 
     return ESP_OK;
 }
+
+#ifdef LED_TWO_LEDS
+static void ledTask(void *pvParameter)
+{
+    ledSetColor(RED, 1);
+    for (;;)
+    {
+        if (xSemaphoreTake(gotData, LED_INACTIVE_TIME / portTICK_PERIOD_MS) == pdTRUE)
+        {
+            ledSetColor(GREEN, 1);
+        }
+        else
+        {
+            ledSetColor(MAGENTA, 1);
+        }
+    }
+}
+#endif
 
 void receiveInit(SemaphoreHandle_t wifiGotIp)
 {
@@ -228,10 +257,19 @@ void receiveInit(SemaphoreHandle_t wifiGotIp)
         ESP_LOGE(TAG, "Create data queue fail");
     }
 
+#ifdef LED_TWO_LEDS
+    gotData = xSemaphoreCreateBinary();
+    if (gotData == NULL)
+    {
+        ESP_LOGE(TAG, "Create gotData semaphore fail");
+    }
+    xTaskCreate(ledTask, "led_inactive", 2048, NULL, 4, NULL);
+#endif
+
     dsmr_wifi_init(wifiGotIp);
     dsmr_espnow_init();
 
-    ledSetColor(MAGENTA);
+    ledSetColor(MAGENTA, 0);
 }
 
 void receiveAck(uint32_t id)

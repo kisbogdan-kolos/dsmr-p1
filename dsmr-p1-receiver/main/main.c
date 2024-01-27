@@ -22,15 +22,30 @@
 #include "websocket/websocket.h"
 #include "led/led.h"
 
-#ifdef LEAK_DETECTOR
 static const char *TAG = "main";
 
+#ifdef LEAK_DETECTOR
 static void leakDetector(void *pvParameters)
 {
     while (true)
     {
         ESP_LOGI(TAG, "Free heap: %lu", esp_get_free_heap_size());
         vTaskDelay(1000 / portTICK_PERIOD_MS);
+    }
+}
+#endif
+
+#ifdef CPU_MONITOR
+static void cpuMonitor(void *pvParameters)
+{
+    while (true)
+    {
+        char *buf = (char *)malloc(1024);
+        vTaskGetRunTimeStats(buf);
+        ESP_LOGI(TAG, "CPU stats:\n%s", buf);
+        free(buf);
+
+        vTaskDelay(10000 / portTICK_PERIOD_MS);
     }
 }
 #endif
@@ -47,10 +62,10 @@ static void wifiReconnectTask(void *pvParameters)
 void app_main(void)
 {
     ledInit();
-    ledSetColor(RED);
+    ledSetColor(RED, 0);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
-    ledSetColor(YELLOW);
+    ledSetColor(YELLOW, 0);
     SemaphoreHandle_t wifiGotIp = xSemaphoreCreateBinary();
     receiveInit(wifiGotIp);
 
@@ -62,5 +77,9 @@ void app_main(void)
 
 #ifdef LEAK_DETECTOR
     xTaskCreate(leakDetector, "leak_detector", 4096, NULL, 0, NULL);
+#endif
+
+#ifdef CPU_MONITOR
+    xTaskCreate(cpuMonitor, "cpu_monitor", 4096, NULL, 0, NULL);
 #endif
 }

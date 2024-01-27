@@ -17,14 +17,24 @@
 
 static const char *TAG = "led";
 
+#ifdef LED_TWO_LEDS
+static const uint8_t numPixels = 2;
+static LedColor color[2] = {OFF, OFF};
+#else
+static const uint8_t numPixels = 1;
+static LedColor color[1] = {OFF};
+#endif
+
 static uint8_t brightness = 0;
-static LedColor color = OFF;
 static adc_oneshot_unit_handle_t adc1_handle;
 static led_strip_handle_t led_strip;
 
 static void updateColor()
 {
-    led_strip_set_pixel(led_strip, 0, ((color & 0b100) >> 2) * brightness, ((color & 0b010) >> 1) * brightness, (color & 0b001) * brightness);
+    for (uint8_t i = 0; i < numPixels; i++)
+    {
+        led_strip_set_pixel(led_strip, i, ((color[i] & 0b100) >> 2) * brightness, ((color[i] & 0b010) >> 1) * brightness, (color[i] & 0b001) * brightness);
+    }
     led_strip_refresh(led_strip);
 }
 
@@ -65,7 +75,7 @@ void ledInit()
 
     led_strip_config_t strip_config = {
         .strip_gpio_num = LED_PIN,
-        .max_leds = 1,
+        .max_leds = numPixels,
     };
 
     led_strip_rmt_config_t rmt_config = {
@@ -77,8 +87,10 @@ void ledInit()
     xTaskCreate(brightnessAdjustTask, "brightness_adjust", 4096, NULL, 2, NULL);
 }
 
-void ledSetColor(LedColor newColor)
+void ledSetColor(LedColor newColor, uint8_t idx)
 {
-    color = newColor;
+    if (idx >= numPixels)
+        return;
+    color[idx] = newColor;
     updateColor();
 }

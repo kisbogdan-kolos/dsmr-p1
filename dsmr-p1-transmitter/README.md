@@ -21,6 +21,7 @@ Important configuration options:
 -   `ESPNOW_DEST_MAC`: The MAC address of the receiver. This can be obtained by uploading a _hello world_ program, that prints the MAC.
 -   `ESPNOW_***_KEY`: Keys for encrypting communications for ESP-NOW. Should be randomly generated. Must be the same for receiver.
 -   `ESPNOW_SLOW_SEND_LIMIT`: After this number of failed send attempts, it will only try once every 60 seconds. Will go back to normal send frequency after receiving a reply.
+-   `LED_TWO_LEDS`: The system uses 2 addressable LEDs
 -   `LEAK_DETECTOR`: Should only be uncommented for testing memory leaks.
 
 ### Data queue save/load speeds
@@ -37,9 +38,27 @@ When building for deployment, you can turn on bootloader and code optimization (
 
 ## LED colours
 
--   red: booting/initializing UART/error
--   yellow: initializing ESP-NOW
+### Using only 1 LED
+
+-   red: booting/error
+-   yellow: initializing UART/ESP-NOW
 -   magenta: initializing SPIFFS
+-   cyan: receiving/parsing P1 data
+-   blue: sending data/waiting for response
+-   yellow: sending data in slow sending mode
+-   green: idle
+
+### Using 2 LEDs, LED1
+
+-   red: booting/error/SPIFFS error
+-   magenta: initializing SPIFFS
+-   yellow: saving data to SPIFFS
+-   cyan: reading data from SPIFFS
+-   green: idle
+
+### Using 2 LEDS, LED2
+
+-   yellow: initializing UART
 -   cyan: receiving/parsing P1 data
 -   blue: sending data/waiting for response
 -   yellow: sending data in slow sending mode

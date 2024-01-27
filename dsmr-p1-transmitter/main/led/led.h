@@ -14,4 +14,4 @@ typedef enum
 
 void ledInit();
 
-void ledSetColor(LedColor color);
+void ledSetColor(LedColor color, uint8_t idx);

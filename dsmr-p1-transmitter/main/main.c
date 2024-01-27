@@ -23,7 +23,7 @@ static void leakDetector(void *pvParameters)
 void app_main(void)
 {
     ledInit();
-    ledSetColor(RED);
+    ledSetColor(RED, 0);
     vTaskDelay(1000 / portTICK_PERIOD_MS);
 
     uartInit();

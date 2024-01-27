@@ -7,3 +7,5 @@ void websocketInit();
 void websocketDestroy();
 
 void websocketSendData(Data *data);
+
+bool websocketIsConnected();

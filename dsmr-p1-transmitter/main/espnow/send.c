@@ -105,12 +105,16 @@ static void dsmr_espnow_task(void *pvParameter)
             xQueueReceive(dataQueueHandle, &currentData, 0);
             if (currentData != NULL)
             {
-                ledSetColor(BLUE);
+#ifdef LED_TWO_LEDS
+                ledSetColor(BLUE, 1);
+#else
+                ledSetColor(BLUE, 0);
+#endif
             }
             else if (esp_get_free_heap_size() < 10000)
             {
                 ESP_LOGE(TAG, "Heap size is low: %lu, restarting...", esp_get_free_heap_size());
-                ledSetColor(RED);
+                ledSetColor(RED, 0);
                 vTaskDelay(10000 / portTICK_PERIOD_MS);
                 esp_restart();
             }
@@ -141,7 +145,13 @@ static void dsmr_espnow_task(void *pvParameter)
                             ESP_LOGI(TAG, "Received data id: %lu", payload->id);
                             free(currentData);
                             currentData = NULL;
-                            ledSetColor(GREEN);
+
+#ifdef LED_TWO_LEDS
+                            ledSetColor(GREEN, 1);
+#else
+                            ledSetColor(GREEN, 0);
+#endif
+
                             sendAttempts = 0;
                         }
                         else if (currentData != NULL)
@@ -178,7 +188,7 @@ static void dsmr_espnow_task(void *pvParameter)
                     if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
                     {
                         ESP_LOGE(TAG, "Send error, rebooting...");
-                        ledSetColor(RED);
+                        ledSetColor(RED, 0);
 
                         xQueueSend(dataQueueHandle, &currentData, 0);
                         currentData = NULL;
@@ -198,7 +208,12 @@ static void dsmr_espnow_task(void *pvParameter)
 
                 if (sendAttempts >= ESPNOW_SLOW_SEND_LIMIT)
                 {
-                    ledSetColor(YELLOW);
+#ifdef LED_TWO_LEDS
+                    ledSetColor(YELLOW, 1);
+#else
+                    ledSetColor(YELLOW, 0);
+#endif
+
                     ESP_LOGW(TAG, "Not getting response, slowing send rate");
 
                     vTaskDelay(60000 / portTICK_PERIOD_MS);
@@ -296,7 +311,7 @@ void sendInit()
 
     xTaskCreate(saveDataTask, "saveDataTask", 2048, NULL, 1, NULL);
 
-    ledSetColor(MAGENTA);
+    ledSetColor(MAGENTA, 0);
 }
 
 void sendQueueData(Data *data)
@@ -308,10 +323,18 @@ void sendQueueData(Data *data)
     }
     if (sendAttempts >= ESPNOW_SLOW_SEND_LIMIT)
     {
-        ledSetColor(YELLOW);
+#ifdef LED_TWO_LEDS
+        ledSetColor(YELLOW, 1);
+#else
+        ledSetColor(YELLOW, 0);
+#endif
     }
     else
     {
-        ledSetColor(BLUE);
+#ifdef LED_TWO_LEDS
+        ledSetColor(BLUE, 1);
+#else
+        ledSetColor(BLUE, 0);
+#endif
     }
 }

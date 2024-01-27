@@ -36,12 +36,12 @@ static void event_handler(void *arg, esp_event_base_t event_base,
             esp_wifi_connect();
             s_retry_num++;
             ESP_LOGI(TAG, "retry to connect to the AP");
-            ledSetColor(MAGENTA);
+            ledSetColor(MAGENTA, 0);
         }
         else
         {
             ESP_LOGE(TAG, "connect to the AP fail, not retrying");
-            ledSetColor(RED);
+            ledSetColor(RED, 0);
         }
         ESP_LOGI(TAG, "connect to the AP fail");
     }
@@ -52,7 +52,7 @@ static void event_handler(void *arg, esp_event_base_t event_base,
         s_retry_num = 0;
         connected = true;
         xSemaphoreGive(wifiGotIp);
-        ledSetColor(CYAN);
+        ledSetColor(CYAN, 0);
     }
 }
 
@@ -104,4 +104,9 @@ void wifiReconnect()
 {
     if (!connected)
         esp_wifi_connect();
+}
+
+bool wifiIsConnected()
+{
+    return connected;
 }

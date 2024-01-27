@@ -25,6 +25,7 @@
 #define ESPNOW_SLOW_SEND_LIMIT 10 // attempts
 
 #define LED_PIN 8
+#define LED_TWO_LEDS
 #define LIGHT_SENSOR ADC_CHANNEL_2
 #define BRIGHTNESS_ADJUST_INTERVAL (60) // s
 

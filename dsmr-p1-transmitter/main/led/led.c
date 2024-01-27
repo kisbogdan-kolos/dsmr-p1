@@ -93,35 +93,4 @@ void ledSetColor(LedColor newColor, uint8_t idx)
         return;
     color[idx] = newColor;
     updateColor();
-
-    if (idx == 1)
-    {
-        switch (newColor)
-        {
-        case OFF:
-            ESP_LOGI(TAG, "LED 2: OFF");
-            break;
-        case RED:
-            ESP_LOGI(TAG, "LED 2: RED");
-            break;
-        case GREEN:
-            ESP_LOGI(TAG, "LED 2: GREEN");
-            break;
-        case BLUE:
-            ESP_LOGI(TAG, "LED 2: BLUE");
-            break;
-        case YELLOW:
-            ESP_LOGI(TAG, "LED 2: YELLOW");
-            break;
-        case MAGENTA:
-            ESP_LOGI(TAG, "LED 2: MAGENTA");
-            break;
-        case CYAN:
-            ESP_LOGI(TAG, "LED 2: CYAN");
-            break;
-        case WHITE:
-            ESP_LOGI(TAG, "LED 2: WHITE");
-            break;
-        }
-    }
 }

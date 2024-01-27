@@ -4,6 +4,7 @@ managed_components
 .devcontainer
 
 debug.log
+sdkconfig
 sdkconfig.old
 sdkconfig.ci
 

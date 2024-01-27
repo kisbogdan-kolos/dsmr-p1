@@ -5,6 +5,7 @@ build
 .devcontainer
 
 debug.log
+sdkconfig
 sdkconfig.ci
 sdkconfig.old
 sdkconfig.old.old

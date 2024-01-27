@@ -22,7 +22,9 @@
 #define ESPNOW_PMK_KEY "aaaaaaaaaaaaaaa"
 #define ESPNOW_LMK_KEY "bbbbbbbbbbbbbbb"
 #define ESPNOW_ENCRYPT true
-#define ESPNOW_SLOW_SEND_LIMIT 10 // attempts
+#define ESPNOW_SLOW_SEND_LIMIT 10         // attempts
+#define ESPNOW_RESEND_INTERVAL 1000       // ms
+#define ESPNOW_SLOW_RESEND_INTERVAL 60000 // ms
 
 #define LED_PIN 8
 #define LED_TWO_LEDS

@@ -26,6 +26,11 @@ static const char *TAG = "espnow-send";
 
 static QueueHandle_t s_example_espnow_queue;
 static QueueHandle_t dataQueueHandle;
+
+static SemaphoreHandle_t dataSent;
+static SemaphoreHandle_t dataAcked;
+static SemaphoreHandle_t currentDataUsed;
+
 static uint8_t destMac[6] = ESPNOW_DEST_MAC;
 static Data *currentData = NULL;
 static uint8_t sendAttempts = 0;
@@ -46,28 +51,21 @@ static void dsmr_wifi_init(void)
 
 static void dsmr_espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-    dsmr_espnow_event_t evt;
-    dsmr_espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
-
     if (mac_addr == NULL)
     {
         ESP_LOGE(TAG, "Send cb arg error");
         return;
     }
 
-    evt.id = EXAMPLE_ESPNOW_SEND_CB;
-    memcpy(send_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    send_cb->status = status;
-    if (xQueueSend(s_example_espnow_queue, &evt, 512) != pdTRUE)
+    if (status == ESP_NOW_SEND_SUCCESS)
     {
-        ESP_LOGW(TAG, "Send send queue fail");
+        xSemaphoreGive(dataSent);
     }
 }
 
 static void dsmr_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len)
 {
-    dsmr_espnow_event_t evt;
-    dsmr_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
+    dsmr_espnow_event_recv_cb_t recv_cb;
     uint8_t *mac_addr = recv_info->src_addr;
 
     if (mac_addr == NULL || data == NULL || len <= 0)
@@ -76,174 +74,201 @@ static void dsmr_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint
         return;
     }
 
-    evt.id = EXAMPLE_ESPNOW_RECV_CB;
-    memcpy(recv_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    recv_cb->data = malloc(len);
-    if (recv_cb->data == NULL)
+    memcpy(recv_cb.mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
+    recv_cb.data = malloc(len);
+    if (recv_cb.data == NULL)
     {
         ESP_LOGE(TAG, "Malloc receive data fail");
         return;
     }
-    memcpy(recv_cb->data, data, len);
-    recv_cb->data_len = len;
-    if (xQueueGenericSend(s_example_espnow_queue, &evt, 512, queueSEND_TO_FRONT) != pdTRUE)
+    memcpy(recv_cb.data, data, len);
+    recv_cb.data_len = len;
+    if (xQueueGenericSend(s_example_espnow_queue, &recv_cb, 0, queueSEND_TO_FRONT) != pdTRUE)
     {
         ESP_LOGW(TAG, "Send receive queue fail");
-        free(recv_cb->data);
+        free(recv_cb.data);
     }
 }
 
-static void dsmr_espnow_task(void *pvParameter)
+static void espnowSendTask(void *pvParameter)
 {
-    dsmr_espnow_event_t evt;
-    evt.id = EXAMPLE_ESPNOW_SEND_CB;
-
-    while (true)
+    for (;;)
     {
-        if (currentData == NULL)
+        while (currentData == NULL)
+            xQueueReceive(dataQueueHandle, &currentData, portMAX_DELAY);
+
+        while (xSemaphoreTake(currentDataUsed, portMAX_DELAY) != pdTRUE)
+            ;
+
+        if (currentData != NULL)
         {
-            xQueueReceive(dataQueueHandle, &currentData, 0);
-            if (currentData != NULL)
+            dsmr_espnow_payload_send *payload = (dsmr_espnow_payload_send *)malloc(sizeof(dsmr_espnow_payload_send));
+            memcpy(&(payload->data), currentData, sizeof(Data));
+            payload->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->data), sizeof(Data));
+
+            xSemaphoreGive(currentDataUsed);
+
+            xSemaphoreTake(dataSent, 100 / portTICK_PERIOD_MS);
+            if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Send error, rebooting...");
+                ledSetColor(RED, 0);
+
+                while (xSemaphoreTake(currentDataUsed, portMAX_DELAY) != pdTRUE)
+                    ;
+                if (currentData != NULL)
+                    xQueueSend(dataQueueHandle, &currentData, 0);
+                currentData = NULL;
+                xSemaphoreGive(currentDataUsed);
+
+                datastoreSave(dataQueueHandle, uxQueueMessagesWaiting(dataQueueHandle));
+
+                vTaskDelay(10000 / portTICK_PERIOD_MS);
+                esp_restart();
+            }
+
+            ESP_LOGI(TAG, "Send data id: %lu", payload->data.id);
+            sendAttempts++;
+
+            free(payload);
+
+            if (sendAttempts >= ESPNOW_SLOW_SEND_LIMIT)
+            {
+#ifdef LED_TWO_LEDS
+                ledSetColor(YELLOW, 1);
+#else
+                ledSetColor(YELLOW, 0);
+#endif
+                ESP_LOGW(TAG, "Slow send limit reached, increasing wait time");
+                xSemaphoreTake(dataAcked, ESPNOW_SLOW_RESEND_INTERVAL / portTICK_PERIOD_MS);
+            }
+            else
             {
 #ifdef LED_TWO_LEDS
                 ledSetColor(BLUE, 1);
 #else
                 ledSetColor(BLUE, 0);
 #endif
-            }
-            else if (esp_get_free_heap_size() < 10000)
-            {
-                ESP_LOGE(TAG, "Heap size is low: %lu, restarting...", esp_get_free_heap_size());
-                ledSetColor(RED, 0);
-                vTaskDelay(10000 / portTICK_PERIOD_MS);
-                esp_restart();
+                xSemaphoreTake(dataAcked, ESPNOW_RESEND_INTERVAL / portTICK_PERIOD_MS);
             }
         }
-
-        if (currentData != NULL && uxQueueMessagesWaiting(s_example_espnow_queue) == 0)
+        else
         {
-            evt.id = EXAMPLE_ESPNOW_SEND_CB;
-            xQueueSend(s_example_espnow_queue, &evt, 0);
+            xSemaphoreGive(currentDataUsed);
         }
+    }
+}
 
-        if (xQueueReceive(s_example_espnow_queue, &evt, 1000 / portTICK_PERIOD_MS) == pdTRUE)
+static void espnowReceiveTask(void *pvParameter)
+{
+    dsmr_espnow_event_recv_cb_t recv_cb;
+
+    for (;;)
+    {
+        if (xQueueReceive(s_example_espnow_queue, &recv_cb, portMAX_DELAY) == pdTRUE)
         {
-            switch (evt.id)
+            if (recv_cb.data_len == sizeof(dsmr_espnow_payload_recv))
             {
-            case EXAMPLE_ESPNOW_RECV_CB:
-            {
-                dsmr_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-
-                if (recv_cb->data_len == sizeof(dsmr_espnow_payload_recv))
+                dsmr_espnow_payload_recv *payload = (dsmr_espnow_payload_recv *)recv_cb.data;
+                uint16_t calc_crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->id), sizeof(uint32_t));
+                if (payload->crc == calc_crc)
                 {
-                    dsmr_espnow_payload_recv *payload = (dsmr_espnow_payload_recv *)recv_cb->data;
-                    uint16_t calc_crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->id), sizeof(uint32_t));
-                    if (payload->crc == calc_crc)
+                    while (xSemaphoreTake(currentDataUsed, portMAX_DELAY) != pdTRUE)
+                        ;
+
+                    if (currentData != NULL && currentData->id == payload->id)
                     {
-                        if (currentData != NULL && currentData->id == payload->id)
-                        {
-                            ESP_LOGI(TAG, "Received data id: %lu", payload->id);
-                            free(currentData);
-                            currentData = NULL;
-
-#ifdef LED_TWO_LEDS
-                            ledSetColor(GREEN, 1);
-#else
-                            ledSetColor(GREEN, 0);
-#endif
-
-                            sendAttempts = 0;
-                        }
-                        else if (currentData != NULL)
-                        {
-                            ESP_LOGE(TAG, "Received data id: %lu, but expected id: %lu", payload->id, currentData->id);
-                        }
-                        else
-                        {
-                            ESP_LOGE(TAG, "Received data id: %lu, but no data to compare", payload->id);
-                        }
-                    }
-                    else
-                    {
-                        ESP_LOGE(TAG, "CRC mismatch");
-                    }
-                }
-                else
-                {
-                    ESP_LOGE(TAG, "Received data with wrong size, expected %u, got %d", sizeof(dsmr_espnow_payload_recv), recv_cb->data_len);
-                }
-
-                free(recv_cb->data);
-
-                break;
-            }
-            case EXAMPLE_ESPNOW_SEND_CB:
-            {
-                if (currentData != NULL)
-                {
-                    dsmr_espnow_payload_send *payload = (dsmr_espnow_payload_send *)malloc(sizeof(dsmr_espnow_payload_send));
-                    memcpy(&(payload->data), currentData, sizeof(Data));
-                    payload->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->data), sizeof(Data));
-
-                    if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Send error, rebooting...");
-                        ledSetColor(RED, 0);
-
-                        xQueueSend(dataQueueHandle, &currentData, 0);
+                        ESP_LOGI(TAG, "Received data id: %lu", payload->id);
+                        free(currentData);
                         currentData = NULL;
-                        datastoreSave(dataQueueHandle, uxQueueMessagesWaiting(dataQueueHandle));
 
-                        vTaskDelay(10000 / portTICK_PERIOD_MS);
-                        esp_restart();
+                        xSemaphoreGive(dataAcked);
+
+#ifdef LED_TWO_LEDS
+                        ledSetColor(GREEN, 1);
+#else
+                        ledSetColor(GREEN, 0);
+#endif
+
+                        sendAttempts = 0;
+                    }
+                    else if (currentData != NULL)
+                    {
+                        ESP_LOGE(TAG, "Received data id: %lu, but expected id: %lu", payload->id, currentData->id);
                     }
                     else
                     {
-                        ESP_LOGI(TAG, "Send data id: %lu", payload->data.id);
-                        sendAttempts++;
+                        ESP_LOGE(TAG, "Received data id: %lu, but no data to compare", payload->id);
                     }
-
-                    free(payload);
-                }
-
-                if (sendAttempts >= ESPNOW_SLOW_SEND_LIMIT)
-                {
-#ifdef LED_TWO_LEDS
-                    ledSetColor(YELLOW, 1);
-#else
-                    ledSetColor(YELLOW, 0);
-#endif
-
-                    ESP_LOGW(TAG, "Not getting response, slowing send rate");
-
-                    vTaskDelay(60000 / portTICK_PERIOD_MS);
-
-                    if (sendAttempts > 254)
-                        sendAttempts = 254;
+                    xSemaphoreGive(currentDataUsed);
                 }
                 else
                 {
-                    vTaskDelay(1000 / portTICK_PERIOD_MS);
+                    ESP_LOGE(TAG, "CRC mismatch");
                 }
+            }
+            else
+            {
+                ESP_LOGE(TAG, "Received data with wrong size, expected %u, got %d", sizeof(dsmr_espnow_payload_recv), recv_cb.data_len);
+            }
 
-                break;
-            }
-            default:
-                ESP_LOGE(TAG, "Callback type error: %d", evt.id);
-                break;
-            }
+            free(recv_cb.data);
+        }
+    }
+}
+
+static void dataSaveTask(void *pvParameter)
+{
+    for (;;)
+    {
+        vTaskDelay(DATA_QUEUE_SAVE_TIME * configTICK_RATE_HZ);
+
+        uint32_t cnt = uxQueueMessagesWaiting(dataQueueHandle);
+        if (cnt == 0)
+        {
+            datastoreRead(dataQueueHandle, DATA_QUEUE_READ_SIZE);
         }
     }
 }
 
 static esp_err_t dsmr_espnow_init(void)
 {
-    s_example_espnow_queue = xQueueCreate(10, sizeof(dsmr_espnow_event_t));
+    s_example_espnow_queue = xQueueCreate(10, sizeof(dsmr_espnow_event_recv_cb_t));
     if (s_example_espnow_queue == NULL)
     {
         ESP_LOGE(TAG, "Create mutex fail");
         return ESP_FAIL;
     }
+
+    dataSent = xSemaphoreCreateBinary();
+    if (dataSent == NULL)
+    {
+        ESP_LOGE(TAG, "Create semaphore fail");
+        vSemaphoreDelete(s_example_espnow_queue);
+        return ESP_FAIL;
+    }
+    xSemaphoreGive(dataSent);
+
+    dataAcked = xSemaphoreCreateBinary();
+    if (dataAcked == NULL)
+    {
+        ESP_LOGE(TAG, "Create semaphore fail");
+        vSemaphoreDelete(s_example_espnow_queue);
+        vSemaphoreDelete(dataSent);
+        return ESP_FAIL;
+    }
+    xSemaphoreTake(dataAcked, 0);
+
+    currentDataUsed = xSemaphoreCreateBinary();
+    if (currentDataUsed == NULL)
+    {
+        ESP_LOGE(TAG, "Create semaphore fail");
+        vSemaphoreDelete(s_example_espnow_queue);
+        vSemaphoreDelete(dataSent);
+        vSemaphoreDelete(dataAcked);
+        return ESP_FAIL;
+    }
+    xSemaphoreGive(currentDataUsed);
 
     ESP_ERROR_CHECK(esp_now_init());
     ESP_ERROR_CHECK(esp_now_register_send_cb(dsmr_espnow_send_cb));
@@ -255,6 +280,9 @@ static esp_err_t dsmr_espnow_init(void)
     {
         ESP_LOGE(TAG, "Malloc peer information fail");
         vSemaphoreDelete(s_example_espnow_queue);
+        vSemaphoreDelete(dataSent);
+        vSemaphoreDelete(dataAcked);
+        vSemaphoreDelete(currentDataUsed);
         esp_now_deinit();
         return ESP_FAIL;
     }
@@ -267,26 +295,11 @@ static esp_err_t dsmr_espnow_init(void)
     ESP_ERROR_CHECK(esp_now_add_peer(peer));
     free(peer);
 
-    xTaskCreate(dsmr_espnow_task, "example_espnow_task", 2048, NULL, 4, NULL);
+    xTaskCreate(espnowReceiveTask, "espnow_receive", 2048, NULL, 4, NULL);
+    xTaskCreate(espnowSendTask, "espnow_send", 2048, NULL, 3, NULL);
+    xTaskCreate(dataSaveTask, "espnow_save", 2048, NULL, 1, NULL);
 
     return ESP_OK;
-}
-
-static void saveDataTask(void *pvParameter)
-{
-    while (true)
-    {
-        vTaskDelay(configTICK_RATE_HZ * DATA_QUEUE_SAVE_TIME);
-        size_t cnt = uxQueueMessagesWaiting(dataQueueHandle);
-        if (cnt >= DATA_QUEUE_SAVE_LIMIT)
-        {
-            datastoreSave(dataQueueHandle, DATA_QUEUE_SAVE_SIZE);
-        }
-        else if (cnt == 0)
-        {
-            datastoreRead(dataQueueHandle, DATA_QUEUE_READ_SIZE);
-        }
-    }
 }
 
 void sendInit()
@@ -308,8 +321,6 @@ void sendInit()
 
     dsmr_wifi_init();
     dsmr_espnow_init();
-
-    xTaskCreate(saveDataTask, "saveDataTask", 2048, NULL, 1, NULL);
 
     ledSetColor(MAGENTA, 0);
 }
@@ -336,5 +347,11 @@ void sendQueueData(Data *data)
 #else
         ledSetColor(BLUE, 0);
 #endif
+    }
+
+    uint32_t cnt = uxQueueMessagesWaiting(dataQueueHandle);
+    if (cnt >= DATA_QUEUE_SAVE_LIMIT)
+    {
+        datastoreSave(dataQueueHandle, DATA_QUEUE_SAVE_SIZE);
     }
 }

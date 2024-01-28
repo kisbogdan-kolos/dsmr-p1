@@ -28,6 +28,8 @@ static const char *TAG = "espnow-recv";
 static QueueHandle_t s_example_espnow_queue;
 static QueueHandle_t dataQueueHandle;
 
+static SemaphoreHandle_t dataSent;
+
 #ifdef LED_TWO_LEDS
 static SemaphoreHandle_t gotData;
 #endif
@@ -48,28 +50,22 @@ static void dsmr_wifi_init(SemaphoreHandle_t wifiGotIp)
 
 static void dsmr_espnow_send_cb(const uint8_t *mac_addr, esp_now_send_status_t status)
 {
-    dsmr_espnow_event_t evt;
-    dsmr_espnow_event_send_cb_t *send_cb = &evt.info.send_cb;
-
     if (mac_addr == NULL)
     {
         ESP_LOGE(TAG, "Send cb arg error");
         return;
     }
 
-    evt.id = EXAMPLE_ESPNOW_SEND_CB;
-    memcpy(send_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    send_cb->status = status;
-    if (xQueueSend(s_example_espnow_queue, &evt, 512) != pdTRUE)
+    if (status == ESP_NOW_SEND_SUCCESS)
     {
-        ESP_LOGW(TAG, "Send send queue fail");
+        xSemaphoreGive(dataSent);
     }
 }
 
 static void dsmr_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint8_t *data, int len)
 {
-    dsmr_espnow_event_t evt;
-    dsmr_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
+
+    dsmr_espnow_event_recv_cb_t recv_cb;
     uint8_t *mac_addr = recv_info->src_addr;
 
     if (mac_addr == NULL || data == NULL || len <= 0)
@@ -78,110 +74,93 @@ static void dsmr_espnow_recv_cb(const esp_now_recv_info_t *recv_info, const uint
         return;
     }
 
-    evt.id = EXAMPLE_ESPNOW_RECV_CB;
-    memcpy(recv_cb->mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
-    recv_cb->data = malloc(len);
-    if (recv_cb->data == NULL)
+    memcpy(recv_cb.mac_addr, mac_addr, ESP_NOW_ETH_ALEN);
+    recv_cb.data = malloc(len);
+    if (recv_cb.data == NULL)
     {
         ESP_LOGE(TAG, "Malloc receive data fail");
         return;
     }
-    memcpy(recv_cb->data, data, len);
-    recv_cb->data_len = len;
-    if (xQueueGenericSend(s_example_espnow_queue, &evt, 512, queueSEND_TO_FRONT) != pdTRUE)
+    memcpy(recv_cb.data, data, len);
+    recv_cb.data_len = len;
+    if (xQueueGenericSend(s_example_espnow_queue, &recv_cb, 0, queueSEND_TO_FRONT) != pdTRUE)
     {
         ESP_LOGW(TAG, "Send receive queue fail");
-        free(recv_cb->data);
+        free(recv_cb.data);
     }
 }
 
-static void dsmr_espnow_task(void *pvParameter)
+static void espnowSendTask(void *pvParameter)
 {
-    dsmr_espnow_event_t evt;
-    evt.id = EXAMPLE_ESPNOW_SEND_CB;
+    uint32_t id;
 
-    while (true)
+    for (;;)
     {
-        if (uxQueueMessagesWaiting(s_example_espnow_queue) == 0 && uxQueueMessagesWaiting(dataQueueHandle) > 0)
+        if (xQueueReceive(dataQueueHandle, &id, portMAX_DELAY) == pdTRUE)
         {
-            evt.id = EXAMPLE_ESPNOW_SEND_CB;
-            xQueueSend(s_example_espnow_queue, &evt, 0);
+            dsmr_espnow_payload_send *payload = (dsmr_espnow_payload_send *)malloc(sizeof(dsmr_espnow_payload_send));
+            payload->id = id;
+            payload->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->id), sizeof(uint32_t));
+
+            if (xSemaphoreTake(dataSent, 100 / portTICK_PERIOD_MS) != pdTRUE)
+            {
+                ESP_LOGW(TAG, "No send callback received in 100ms, proceeding");
+            }
+
+            if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
+            {
+                ESP_LOGE(TAG, "Send error, rebooting...");
+                ledSetColor(RED, 0);
+                vTaskDelay(10000 / portTICK_PERIOD_MS);
+                esp_restart();
+            }
+
+            ESP_LOGI(TAG, "Send data id: %lu", payload->id);
+
+            free(payload);
         }
 
-        if (xQueueReceive(s_example_espnow_queue, &evt, 1000 / portTICK_PERIOD_MS) == pdTRUE)
+        vTaskDelay(100 / portTICK_PERIOD_MS);
+
+        ledSetColor(GREEN, 0);
+    }
+}
+
+static void espnowReceiveTask(void *pvParameter)
+{
+    dsmr_espnow_event_recv_cb_t recv_cb;
+    for (;;)
+    {
+        if (xQueueReceive(s_example_espnow_queue, &recv_cb, 1000 / portTICK_PERIOD_MS) == pdTRUE)
         {
-            switch (evt.id)
+            if (recv_cb.data_len == sizeof(dsmr_espnow_payload_recv))
             {
-            case EXAMPLE_ESPNOW_SEND_CB:
-            {
-                uint32_t id;
-
-                if (xQueueReceive(dataQueueHandle, &id, 0) == pdTRUE)
+                dsmr_espnow_payload_recv *payload = (dsmr_espnow_payload_recv *)recv_cb.data;
+                uint16_t calc_crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->data), sizeof(Data));
+                if (payload->crc == calc_crc)
                 {
-                    dsmr_espnow_payload_send *payload = (dsmr_espnow_payload_send *)malloc(sizeof(dsmr_espnow_payload_send));
-                    payload->id = id;
-                    payload->crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->id), sizeof(uint32_t));
+                    ESP_LOGI(TAG, "Received data id: %lu", payload->data.id);
 
-                    if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
-                    {
-                        ESP_LOGE(TAG, "Send error, rebooting...");
-                        ledSetColor(RED, 0);
-                        vTaskDelay(10000 / portTICK_PERIOD_MS);
-                        esp_restart();
-                    }
-                    else
-                    {
-                        ESP_LOGI(TAG, "Send data id: %lu", payload->id);
-                    }
-
-                    free(payload);
-                }
-
-                vTaskDelay(100 / portTICK_PERIOD_MS);
-
-                ledSetColor(GREEN, 0);
-
-                break;
-            }
-            case EXAMPLE_ESPNOW_RECV_CB:
-            {
-                dsmr_espnow_event_recv_cb_t *recv_cb = &evt.info.recv_cb;
-
-                if (recv_cb->data_len == sizeof(dsmr_espnow_payload_recv))
-                {
-                    dsmr_espnow_payload_recv *payload = (dsmr_espnow_payload_recv *)recv_cb->data;
-                    uint16_t calc_crc = esp_crc16_le(UINT16_MAX, (uint8_t const *)&(payload->data), sizeof(Data));
-                    if (payload->crc == calc_crc)
-                    {
-                        ESP_LOGI(TAG, "Received data id: %lu", payload->data.id);
-
-                        if (wifiIsConnected() && websocketIsConnected())
-                            ledSetColor(BLUE, 0);
+                    if (wifiIsConnected() && websocketIsConnected())
+                        ledSetColor(BLUE, 0);
 
 #ifdef LED_TWO_LEDS
-                        xSemaphoreGive(gotData);
+                    xSemaphoreGive(gotData);
 #endif
 
-                        websocketSendData(&(payload->data));
-                    }
-                    else
-                    {
-                        ESP_LOGE(TAG, "CRC mismatch");
-                    }
+                    websocketSendData(&(payload->data));
                 }
                 else
                 {
-                    ESP_LOGE(TAG, "Received data with wrong size, expected %u, got %d", sizeof(dsmr_espnow_payload_recv), recv_cb->data_len);
+                    ESP_LOGE(TAG, "CRC mismatch");
                 }
-
-                free(recv_cb->data);
-
-                break;
             }
-            default:
-                ESP_LOGE(TAG, "Callback type error: %d", evt.id);
-                break;
+            else
+            {
+                ESP_LOGE(TAG, "Received data with wrong size, expected %u, got %d", sizeof(dsmr_espnow_payload_recv), recv_cb.data_len);
             }
+
+            free(recv_cb.data);
         }
     }
 }
@@ -189,12 +168,21 @@ static void dsmr_espnow_task(void *pvParameter)
 static esp_err_t dsmr_espnow_init(void)
 {
 
-    s_example_espnow_queue = xQueueCreate(10, sizeof(dsmr_espnow_event_t));
+    s_example_espnow_queue = xQueueCreate(10, sizeof(dsmr_espnow_event_recv_cb_t));
     if (s_example_espnow_queue == NULL)
     {
         ESP_LOGE(TAG, "Create mutex fail");
         return ESP_FAIL;
     }
+
+    dataSent = xSemaphoreCreateBinary();
+    if (dataSent == NULL)
+    {
+        ESP_LOGE(TAG, "Create semaphore fail");
+        vSemaphoreDelete(s_example_espnow_queue);
+        return ESP_FAIL;
+    }
+    xSemaphoreGive(dataSent);
 
     ESP_ERROR_CHECK(esp_now_init());
     ESP_ERROR_CHECK(esp_now_register_send_cb(dsmr_espnow_send_cb));
@@ -206,6 +194,7 @@ static esp_err_t dsmr_espnow_init(void)
     {
         ESP_LOGE(TAG, "Malloc peer information fail");
         vSemaphoreDelete(s_example_espnow_queue);
+        vSemaphoreDelete(dataSent);
         esp_now_deinit();
         return ESP_FAIL;
     }
@@ -218,7 +207,8 @@ static esp_err_t dsmr_espnow_init(void)
     ESP_ERROR_CHECK(esp_now_add_peer(peer));
     free(peer);
 
-    xTaskCreate(dsmr_espnow_task, "espnow", 2048, NULL, 4, NULL);
+    xTaskCreate(espnowReceiveTask, "espnow_send", 2048, NULL, 4, NULL);
+    xTaskCreate(espnowSendTask, "espnow_send", 2048, NULL, 5, NULL);
 
     return ESP_OK;
 }
@@ -277,11 +267,5 @@ void receiveAck(uint32_t id)
     if (xQueueSend(dataQueueHandle, &id, 0) != pdTRUE)
     {
         ESP_LOGE(TAG, "Send data to queue fail");
-    }
-    else if (uxQueueMessagesWaiting(s_example_espnow_queue) == 0)
-    {
-        dsmr_espnow_event_t evt;
-        evt.id = EXAMPLE_ESPNOW_SEND_CB;
-        xQueueSend(s_example_espnow_queue, &evt, 0);
     }
 }

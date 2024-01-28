@@ -108,7 +108,11 @@ static void espnowSendTask(void *pvParameter)
 
             xSemaphoreGive(currentDataUsed);
 
-            xSemaphoreTake(dataSent, 100 / portTICK_PERIOD_MS);
+            if (xSemaphoreTake(dataSent, 100 / portTICK_PERIOD_MS) != pdTRUE)
+            {
+                ESP_LOGW(TAG, "No send callback received in 100ms, proceeding");
+            }
+
             if (esp_now_send(destMac, (const uint8_t *)payload, sizeof(dsmr_espnow_payload_send)) != ESP_OK)
             {
                 ESP_LOGE(TAG, "Send error, rebooting...");
